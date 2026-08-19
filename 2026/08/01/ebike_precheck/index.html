@@ -1,0 +1,418 @@
+<!DOCTYPE html><html lang="zh_CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>电动自行车智能预审系统：OCR + CV 的资料合规初筛实践 | AkiTomoyaL</title><meta name="author" content="AkiTomoyaL"><meta name="copyright" content="AkiTomoyaL"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="记录电动自行车智能预审系统的一次实践：通过 OCR 和 CV 对证件、发票、车辆照片和关键部件进行初筛，并交给规则引擎输出预审结果。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="电动自行车智能预审系统：OCR + CV 的资料合规初筛实践">
+<meta property="og:url" content="https://akitomoyal.github.io/2026/08/01/ebike_precheck/index.html">
+<meta property="og:site_name" content="AkiTomoyaL">
+<meta property="og:description" content="记录电动自行车智能预审系统的一次实践：通过 OCR 和 CV 对证件、发票、车辆照片和关键部件进行初筛，并交给规则引擎输出预审结果。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://akitomoyal.github.io/media/cover/6.png">
+<meta property="article:published_time" content="2026-08-01T07:00:00.000Z">
+<meta property="article:modified_time" content="2026-08-01T07:30:00.000Z">
+<meta property="article:author" content="AkiTomoyaL">
+<meta property="article:tag" content="机器视觉">
+<meta property="article:tag" content="OCR">
+<meta property="article:tag" content="PaddleX">
+<meta property="article:tag" content="FastAPI">
+<meta property="article:tag" content="项目实践">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://akitomoyal.github.io/media/cover/6.png"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://akitomoyal.github.io/2026/08/01/ebike_precheck/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"languages":{"hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found"}},
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":210},
+  copy: {
+    success: 'Copy Successful',
+    error: 'Copy Error',
+    noSupport: 'Browser Not Supported'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: 'Just now',
+    min: 'minutes ago',
+    hour: 'hours ago',
+    day: 'days ago',
+    month: 'months ago'
+  },
+  copyright: {"limitCount":20,"languages":{"author":"Author: AkiTomoyaL","link":"Link: ","source":"Source: AkiTomoyaL","info":"Copyright is owned by the author. For commercial reprints, please contact the author for authorization. For non-commercial reprints, please indicate the source."}},
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: 'Load More'
+  },
+  isPhotoFigcaption: false,
+  islazyload: false,
+  isAnchor: true,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '电动自行车智能预审系统：OCR + CV 的资料合规初筛实践',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: true,
+  isToc: true,
+  postUpdate: '2026-08-01 15:30:00'
+}</script><script>(win=>{
+      win.saveToLocal = {
+        set: (key, value, ttl) => {
+          if (ttl === 0) return
+          const now = Date.now()
+          const expiry = now + ttl * 86400000
+          const item = {
+            value,
+            expiry
+          }
+          localStorage.setItem(key, JSON.stringify(item))
+        },
+      
+        get: key => {
+          const itemStr = localStorage.getItem(key)
+      
+          if (!itemStr) {
+            return undefined
+          }
+          const item = JSON.parse(itemStr)
+          const now = Date.now()
+      
+          if (now > item.expiry) {
+            localStorage.removeItem(key)
+            return undefined
+          }
+          return item.value
+        }
+      }
+    
+      win.getScript = (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        script.onerror = reject
+        script.onload = script.onreadystatechange = function() {
+          const loadState = this.readyState
+          if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+          script.onload = script.onreadystatechange = null
+          resolve()
+        }
+
+        Object.keys(attr).forEach(key => {
+          script.setAttribute(key, attr[key])
+        })
+
+        document.head.appendChild(script)
+      })
+    
+      win.getCSS = (url, id = false) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onerror = reject
+        link.onload = link.onreadystatechange = function() {
+          const loadState = this.readyState
+          if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+          link.onload = link.onreadystatechange = null
+          resolve()
+        }
+        document.head.appendChild(link)
+      })
+    
+      win.activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          const now = new Date()
+          const hour = now.getHours()
+          const isNight = hour <= 6 || hour >= 18
+          if (t === undefined) isNight ? activateDarkMode() : activateLightMode()
+          else if (t === 'light') activateLightMode()
+          else activateDarkMode()
+        
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        if (asideStatus === 'hide') {
+          document.documentElement.classList.add('hide-aside')
+        } else {
+          document.documentElement.classList.remove('hide-aside')
+        }
+      }
+    
+      const detectApple = () => {
+        if(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)){
+          document.documentElement.classList.add('apple')
+        }
+      }
+      detectApple()
+    })(window)</script><link rel="stylesheet" href="/css/custom.css?1"><div id="myscoll"> </div><meta name="generator" content="Hexo 7.0.0"></head><body><div id="loading-box" onclick="document.getElementById(&quot;loading-box&quot;).classList.add(&quot;loaded&quot;)"><div class="loading-bg"><div class="loading-img"></div><div class="loading-image-dot"></div></div></div><script>const preloader = {
+  endLoading: () => {
+    document.body.style.overflow = 'auto';
+    document.getElementById('loading-box').classList.add("loaded")
+  },
+  initLoading: () => {
+    document.body.style.overflow = '';
+    document.getElementById('loading-box').classList.remove("loaded")
+
+  }
+}
+window.addEventListener('load',()=> { preloader.endLoading() })
+
+if (true) {
+  document.addEventListener('pjax:send', () => { preloader.initLoading() })
+  document.addEventListener('pjax:complete', () => { preloader.endLoading() })
+}</script><div id="web_bg"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img is-center"><img src="/img/avatar.jpg" onerror="onerror=null;src='/img/fri404.gif'" alt="avatar"/></div><div class="sidebar-site-data site-data is-center"><a href="/archives/"><div class="headline">Articles</div><div class="length-num">8</div></a><a href="/tags/"><div class="headline">Tags</div><div class="length-num">18</div></a><a href="/categories/"><div class="headline">Categories</div><div class="length-num">3</div></a></div><hr class="custom-hr"/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page group hide" href="javascript:void(0);"><i class="fa-fw fas fa-list"></i><span> 列表</span><i class="fas fa-chevron-down"></i></a><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> 音乐</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 档案</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 传送门</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('/media/cover/6.png')"><nav id="nav"><span id="blog-info"><a href="/" title="AkiTomoyaL"><span class="site-name">AkiTomoyaL</span></a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search" href="javascript:void(0);"><i class="fas fa-search fa-fw"></i></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page group hide" href="javascript:void(0);"><i class="fa-fw fas fa-list"></i><span> 列表</span><i class="fas fa-chevron-down"></i></a><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> 音乐</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 档案</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 传送门</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><a class="site-page" href="javascript:void(0);"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">电动自行车智能预审系统：OCR + CV 的资料合规初筛实践</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">Created</span><time class="post-meta-date-created" datetime="2026-08-01T07:00:00.000Z" title="Created 2026-08-01 15:00:00">2026-08-01</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">Updated</span><time class="post-meta-date-updated" datetime="2026-08-01T07:30:00.000Z" title="Updated 2026-08-01 15:30:00">2026-08-01</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">Word Count:</span><span class="word-count">2.2k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">Reading Time:</span><span>6mins</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="电动自行车智能预审系统：OCR + CV 的资料合规初筛实践"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">Post Views:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><blockquote>
+<p>这次整理的是一个电动自行车智能预审系统。核心想法很直接：把人工审核前面那些重复、机械、容易漏看的检查，先让 OCR + CV 帮忙筛一遍。</p>
+</blockquote>
+<mark class="hl-label blue">不拒众流，方为江海</mark> 
+
+<p>好耶！<img class="inline-img" src="/pageimg/haoye1.gif" style="height:80px" /></p>
+<p>这篇按项目复盘写一下：资料怎么分类，证件怎么识别，车辆部件怎么比对，最后怎么进合规规则引擎。</p>
+<hr>
+<h2 id="一、为什么要做预审"><a href="#一、为什么要做预审" class="headerlink" title="一、为什么要做预审"></a>一、为什么要做预审</h2><p>电动自行车报审材料里，最常见的问题不是特别复杂，而是特别杂：</p>
+<ul>
+<li>合格证、发票、身份证、查验表经常混在一起；</li>
+<li>VIN、品牌型号、电机功率、电池类型这些字段需要人工对；</li>
+<li>整车图、部件图、VIN 码图片质量参差不齐；</li>
+<li>有些车可能存在改装风险，比如电池、电机、控制器等关键部件不一致；</li>
+<li>缺材料时，人工还要来回退补。</li>
+</ul>
+<p>如果所有材料都直接进人工审核，效率会很低。<br>所以预审系统不做最终裁定，它更像一个前置分拣员：</p>
+<ol>
+<li>先把材料接住并分类；</li>
+<li>能 OCR 的先抽字段；</li>
+<li>能视觉检测的先定位部件；</li>
+<li>规则能判的先判；</li>
+<li>不确定的再拦截给人工复核。</li>
+</ol>
+<div class="note info modern"><p>我的理解是：预审系统不是替代人工，而是把“明显通过、明显缺失、明显可疑”的材料先分出来，让人工集中处理真正需要判断的部分。</p>
+</div>
+
+<hr>
+<h2 id="二、整体结构"><a href="#二、整体结构" class="headerlink" title="二、整体结构"></a>二、整体结构</h2><p>先放结构图，整套流程基本按“材料分类 -&gt; OCR &#x2F; CV 两条线 -&gt; 规则引擎 -&gt; 预审结果”来走。</p>
+<p><img src="/media/post/ebike-precheck-flow.png" alt="电动自行车智能预审系统结构图"></p>
+<p>从入口看，材料会先进入预审系统，然后分成两类：</p>
+<table>
+<thead>
+<tr>
+<th>材料类型</th>
+<th>处理方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>合格证 &#x2F; 发票 &#x2F; 身份证 &#x2F; 查验表</td>
+<td>OCR 解析，结合 PaddleX + 正则做结构化字段提取</td>
+</tr>
+<tr>
+<td>整车图 &#x2F; 车辆部件图 &#x2F; VIN 码图片</td>
+<td>CV 检测、关键区域定位、部件实例分割和相似度比对</td>
+</tr>
+</tbody></table>
+<p>两条线最后都会汇到 <strong>FastAPI 预审路由</strong>，再交给<strong>合规规则引擎</strong>统一判断。</p>
+<hr>
+<h2 id="三、证件线：OCR-先把字段拿出来"><a href="#三、证件线：OCR-先把字段拿出来" class="headerlink" title="三、证件线：OCR 先把字段拿出来"></a>三、证件线：OCR 先把字段拿出来</h2><p>证件材料主要解决的是“文字信息能不能对上”。</p>
+<p>流程大概是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">合格证 / 发票 / 身份证 / 查验表</span><br><span class="line">        ↓</span><br><span class="line">OCR 解析引擎</span><br><span class="line">        ↓</span><br><span class="line">PaddleX + 正则结构化抽取</span><br><span class="line">        ↓</span><br><span class="line">VIN、电机功率、电池类型、品牌型号等字段</span><br></pre></td></tr></table></figure>
+
+<p>OCR 只负责把文字读出来还不够。<br>真正落到业务里，还要把一堆文本变成稳定字段，比如：</p>
+<ul>
+<li>VIN；</li>
+<li>电机功率；</li>
+<li>电池类型；</li>
+<li>品牌；</li>
+<li>型号；</li>
+<li>发票信息；</li>
+<li>证件号；</li>
+<li>查验表关键项。</li>
+</ul>
+<p>这里我会更倾向于 “OCR + 规则” 混合处理。<br>模型负责识别，正则和字段规则负责收口，不然很容易出现读出来一大段字，但系统不知道哪个字段该往哪里填。</p>
+<h3 id="一个细节：字段置信度要留下"><a href="#一个细节：字段置信度要留下" class="headerlink" title="一个细节：字段置信度要留下"></a>一个细节：字段置信度要留下</h3><p>有些字段 OCR 结果会很像，但差一个字符就完全不是一回事，尤其是 VIN。<br>所以结构化时最好保留原始识别文本、清洗后的字段、置信度和来源图片，后面人工复核会轻松很多。</p>
+<hr>
+<h2 id="四、图像线：先找关键部件，再做一致性比对"><a href="#四、图像线：先找关键部件，再做一致性比对" class="headerlink" title="四、图像线：先找关键部件，再做一致性比对"></a>四、图像线：先找关键部件，再做一致性比对</h2><p>车辆图片这条线，重点不是“看图好不好看”，而是看关键部件是否和标准信息一致。</p>
+<p>结构图里的 CV 链路是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">整车图 / 部件图 / VIN 码图片</span><br><span class="line">        ↓</span><br><span class="line">CV 视觉检测引擎</span><br><span class="line">        ↓</span><br><span class="line">车辆关键区域检测</span><br><span class="line">        ↓</span><br><span class="line">车辆部件实例分割</span><br><span class="line">        ↓</span><br><span class="line">电池 / 电机 / 车架 / 控制器等部件区域</span><br><span class="line">        ↓</span><br><span class="line">部件特征向量提取</span><br><span class="line">        ↓</span><br><span class="line">标准部件向量库比对</span><br><span class="line">        ↓</span><br><span class="line">相似度评分</span><br></pre></td></tr></table></figure>
+
+<p>这里比较关键的是两层：</p>
+<ol>
+<li><strong>检测定位</strong>：先把整车、VIN、关键部件区域找出来；</li>
+<li><strong>相似度比对</strong>：把部件特征和标准库里的部件向量做比较。</li>
+</ol>
+<p>最后根据相似度分数判断是否存在疑似改装：</p>
+<ul>
+<li>相似度正常：部件一致性通过；</li>
+<li>相似度偏低：打上改装风险标记；</li>
+<li>图片质量太差：不能硬判，应该退补或转人工。</li>
+</ul>
+<div class="note warning modern"><p>视觉模型最怕“看不清还硬判”。预审系统宁愿输出“需要复核”，也不要把低质量图片包装成高置信结果。</p>
+</div>
+
+<hr>
+<h2 id="五、FastAPI-预审路由：把模型结果交给规则"><a href="#五、FastAPI-预审路由：把模型结果交给规则" class="headerlink" title="五、FastAPI 预审路由：把模型结果交给规则"></a>五、FastAPI 预审路由：把模型结果交给规则</h2><p>OCR 和 CV 的结果最终会进入 FastAPI 预审路由。</p>
+<p>我比较喜欢把这里当成一个“汇总口”：</p>
+<ul>
+<li>接收证件结构化字段；</li>
+<li>接收车辆图像检测结果；</li>
+<li>接收相似度评分和风险标记；</li>
+<li>统一组装成规则引擎能理解的数据结构；</li>
+<li>生成预审记录。</li>
+</ul>
+<p>真正决定预审状态的是后面的<strong>合规规则引擎</strong>，主要校验四类问题：</p>
+<table>
+<thead>
+<tr>
+<th>校验项</th>
+<th>看什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>证件与车辆信息一致性校验</td>
+<td>VIN、品牌型号、发票 &#x2F; 合格证信息是否对得上</td>
+</tr>
+<tr>
+<td>参数合规校验</td>
+<td>电机功率、电池类型等关键参数是否符合要求</td>
+</tr>
+<tr>
+<td>改装风险校验</td>
+<td>部件相似度是否异常，是否存在疑似改装</td>
+</tr>
+<tr>
+<td>资料完整性校验</td>
+<td>必传材料是否齐全，图片是否可识别</td>
+</tr>
+</tbody></table>
+<p>这样拆完之后，模型和规则的边界会清楚很多：</p>
+<ul>
+<li>模型负责“看见”和“抽取”；</li>
+<li>规则负责“判断”和“分流”。</li>
+</ul>
+<hr>
+<h2 id="六、预审结果怎么分流"><a href="#六、预审结果怎么分流" class="headerlink" title="六、预审结果怎么分流"></a>六、预审结果怎么分流</h2><p>规则引擎输出的结果大概分三类：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">预审结果</span><br><span class="line">    ├─ 合格：自动通过</span><br><span class="line">    ├─ 资料缺失：退回补正</span><br><span class="line">    └─ 疑似改装 / 不合规：自动拦截或人工复核</span><br></pre></td></tr></table></figure>
+
+<p>这里有个很实际的点：<br>预审系统的价值，不只是“自动通过”，更重要的是把退补原因说清楚。</p>
+<p>比如：</p>
+<ul>
+<li>缺少发票；</li>
+<li>VIN 码图片无法识别；</li>
+<li>合格证型号与车辆图像疑似不一致；</li>
+<li>电池部件相似度偏低，建议人工复核；</li>
+<li>电机功率字段缺失或疑似超标。</li>
+</ul>
+<p>有明确原因，申请人补材料才不会乱补，审核人员也能快速定位问题。</p>
+<hr>
+<h2 id="七、几个让系统更稳的点"><a href="#七、几个让系统更稳的点" class="headerlink" title="七、几个让系统更稳的点"></a>七、几个让系统更稳的点</h2><h3 id="1-先分类，再识别"><a href="#1-先分类，再识别" class="headerlink" title="1. 先分类，再识别"></a>1. 先分类，再识别</h3><p>材料没分类就直接 OCR，很容易把身份证当发票，把查验表当合格证。<br>先做材料接收与分类，后面的识别规则才有上下文。</p>
+<h3 id="2-VIN-要重点保护"><a href="#2-VIN-要重点保护" class="headerlink" title="2. VIN 要重点保护"></a>2. VIN 要重点保护</h3><p>VIN 是证件线和图像线连接的关键字段。<br>OCR 抽 VIN、VIN 码图片识别、证件信息一致性校验都绕不开它，所以这里要保留原图、原始文本和清洗结果。</p>
+<h3 id="3-规则别全塞进模型"><a href="#3-规则别全塞进模型" class="headerlink" title="3. 规则别全塞进模型"></a>3. 规则别全塞进模型</h3><p>参数合规、资料完整性、是否退补，这些更适合规则引擎处理。<br>模型可以帮忙识别和分类，但最后判断最好可解释、可追溯。</p>
+<h3 id="4-预审记录要完整"><a href="#4-预审记录要完整" class="headerlink" title="4. 预审记录要完整"></a>4. 预审记录要完整</h3><p>每次预审都应该生成记录：材料、字段、相似度、命中的规则、最终结果。<br>后面无论是人工复核，还是回看误判，都要靠这些记录。</p>
+<hr>
+<h2 id="八、项目全链路实现"><a href="#八、项目全链路实现" class="headerlink" title="八、项目全链路实现"></a>八、项目全链路实现</h2><ol>
+<li>申请人提交上牌材料；</li>
+<li>预审系统入口接收材料；</li>
+<li>材料接收与分类；</li>
+<li>证件线：OCR + PaddleX + 正则抽取 VIN、电机功率、电池类型、品牌型号等字段；</li>
+<li>图像线：车辆关键区域检测、部件实例分割、特征向量提取和标准库比对；</li>
+<li>FastAPI 预审路由汇总结构化结果；</li>
+<li>合规规则引擎做一致性、参数、改装风险和完整性校验；</li>
+<li>输出预审结果；</li>
+<li>自动通过、退回补正，或者拦截转人工复核；</li>
+<li>生成预审记录。</li>
+</ol>
+<p>能力上大概覆盖：<strong>OCR 结构化抽取 &#x2F; 机器视觉检测 &#x2F; 部件相似度检索 &#x2F; FastAPI 服务 &#x2F; 合规规则引擎</strong>。</p>
+<hr>
+<h2 id="写在最后"><a href="#写在最后" class="headerlink" title="写在最后"></a>写在最后</h2><p>这个系统比较有意思的地方在于，它不是单纯做 OCR，也不是单纯做目标检测，而是把两条线合到一个业务判断里。</p>
+<p>证件线解决“资料上写了什么”；<br>图像线解决“车和部件看起来是不是对”；<br>规则引擎解决“这些信息放在一起合不合规”。</p>
+<p>后面如果继续优化，我会优先补三件事：</p>
+<ol>
+<li>标准部件向量库持续扩充；</li>
+<li>人工复核结果反哺模型阈值；</li>
+<li>对低质量图片做更明确的退补提示。</li>
+</ol>
+<p>预审这类项目，最怕模型单点炫技。<br>真正有用的是：能把材料收住、字段抽准、风险说清楚，然后把人工从重复检查里解放一点出来。</p>
+<blockquote>
+<p>行有所思，学有所得。—— AkiTomoyaL</p>
+</blockquote>
+<p><u class="pn">OCR 抽字段</u><u class="pn">CV 看部件</u><u class="pn">规则做判断</u><img class="inline-img" src="/pageimg/haoye2.gif" style="height:80px" />
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>Author: </span><span class="post-copyright-info"><a href="https://akitomoyal.github.io">AkiTomoyaL</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>Link: </span><span class="post-copyright-info"><a href="https://akitomoyal.github.io/2026/08/01/ebike_precheck/">https://akitomoyal.github.io/2026/08/01/ebike_precheck/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>Copyright Notice: </span><span class="post-copyright-info">All articles in this blog are licensed under <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> unless stating additionally.</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E6%9C%BA%E5%99%A8%E8%A7%86%E8%A7%89/">机器视觉</a><a class="post-meta__tags" href="/tags/OCR/">OCR</a><a class="post-meta__tags" href="/tags/PaddleX/">PaddleX</a><a class="post-meta__tags" href="/tags/FastAPI/">FastAPI</a><a class="post-meta__tags" href="/tags/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E8%B7%B5/">项目实践</a></div><div class="post_share"><div class="social-share" data-image="/media/cover/6.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/2026/08/19/qianchuan_auto_promotion/" title="千川自动化投流项目：从素材上传到 ROI 降档的全链路实践"><img class="cover" src="/media/cover/2.png" onerror="onerror=null;src='/img/error.png'" alt="cover of previous post"><div class="pagination-info"><div class="label">Previous</div><div class="prev_info">千川自动化投流项目：从素材上传到 ROI 降档的全链路实践</div></div></a></div><div class="next-post pull-right"><a href="/2026/07/24/wecom_ai_customer_service/" title="从 0 到 1：企业微信智能客服落地实践（LangGraph + RAG）"><img class="cover" src="/media/cover/5.png" onerror="onerror=null;src='/img/error.png'" alt="cover of next post"><div class="pagination-info"><div class="label">Next</div><div class="next_info">从 0 到 1：企业微信智能客服落地实践（LangGraph + RAG）</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>Related Articles</span></div><div class="relatedPosts-list"><div><a href="/2023/12/06/license_plate/" title="基于YOLOv5-LPRNet的车牌检测与识别"><img class="cover" src="/media/cover/11.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-12-06</div><div class="title">基于YOLOv5-LPRNet的车牌检测与识别</div></div></a></div><div><a href="/2026/08/19/qianchuan_auto_promotion/" title="千川自动化投流项目：从素材上传到 ROI 降档的全链路实践"><img class="cover" src="/media/cover/2.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="title">千川自动化投流项目：从素材上传到 ROI 降档的全链路实践</div></div></a></div><div><a href="/2026/07/24/wecom_ai_customer_service/" title="从 0 到 1：企业微信智能客服落地实践（LangGraph + RAG）"><img class="cover" src="/media/cover/5.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-24</div><div class="title">从 0 到 1：企业微信智能客服落地实践（LangGraph + RAG）</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="is-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/fri404.gif'" alt="avatar"/></div><div class="author-info__name">AkiTomoyaL</div><div class="author-info__description">一事无成的数学废物</div></div><div class="card-info-data site-data is-center"><a href="/archives/"><div class="headline">Articles</div><div class="length-num">8</div></a><a href="/tags/"><div class="headline">Tags</div><div class="length-num">18</div></a><a href="/categories/"><div class="headline">Categories</div><div class="length-num">3</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/AkiTomoyaL"><i class="fab fa-github"></i><span>魔法小屋</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>Announcement</span></div><div class="announcement_content">行有所思，学有所得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>Contents</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%81%9A%E9%A2%84%E5%AE%A1"><span class="toc-number">1.</span> <span class="toc-text">一、为什么要做预审</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E6%95%B4%E4%BD%93%E7%BB%93%E6%9E%84"><span class="toc-number">2.</span> <span class="toc-text">二、整体结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E8%AF%81%E4%BB%B6%E7%BA%BF%EF%BC%9AOCR-%E5%85%88%E6%8A%8A%E5%AD%97%E6%AE%B5%E6%8B%BF%E5%87%BA%E6%9D%A5"><span class="toc-number">3.</span> <span class="toc-text">三、证件线：OCR 先把字段拿出来</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%80%E4%B8%AA%E7%BB%86%E8%8A%82%EF%BC%9A%E5%AD%97%E6%AE%B5%E7%BD%AE%E4%BF%A1%E5%BA%A6%E8%A6%81%E7%95%99%E4%B8%8B"><span class="toc-number">3.1.</span> <span class="toc-text">一个细节：字段置信度要留下</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E5%9B%BE%E5%83%8F%E7%BA%BF%EF%BC%9A%E5%85%88%E6%89%BE%E5%85%B3%E9%94%AE%E9%83%A8%E4%BB%B6%EF%BC%8C%E5%86%8D%E5%81%9A%E4%B8%80%E8%87%B4%E6%80%A7%E6%AF%94%E5%AF%B9"><span class="toc-number">4.</span> <span class="toc-text">四、图像线：先找关键部件，再做一致性比对</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81FastAPI-%E9%A2%84%E5%AE%A1%E8%B7%AF%E7%94%B1%EF%BC%9A%E6%8A%8A%E6%A8%A1%E5%9E%8B%E7%BB%93%E6%9E%9C%E4%BA%A4%E7%BB%99%E8%A7%84%E5%88%99"><span class="toc-number">5.</span> <span class="toc-text">五、FastAPI 预审路由：把模型结果交给规则</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E9%A2%84%E5%AE%A1%E7%BB%93%E6%9E%9C%E6%80%8E%E4%B9%88%E5%88%86%E6%B5%81"><span class="toc-number">6.</span> <span class="toc-text">六、预审结果怎么分流</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E5%87%A0%E4%B8%AA%E8%AE%A9%E7%B3%BB%E7%BB%9F%E6%9B%B4%E7%A8%B3%E7%9A%84%E7%82%B9"><span class="toc-number">7.</span> <span class="toc-text">七、几个让系统更稳的点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%85%88%E5%88%86%E7%B1%BB%EF%BC%8C%E5%86%8D%E8%AF%86%E5%88%AB"><span class="toc-number">7.1.</span> <span class="toc-text">1. 先分类，再识别</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-VIN-%E8%A6%81%E9%87%8D%E7%82%B9%E4%BF%9D%E6%8A%A4"><span class="toc-number">7.2.</span> <span class="toc-text">2. VIN 要重点保护</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E8%A7%84%E5%88%99%E5%88%AB%E5%85%A8%E5%A1%9E%E8%BF%9B%E6%A8%A1%E5%9E%8B"><span class="toc-number">7.3.</span> <span class="toc-text">3. 规则别全塞进模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E9%A2%84%E5%AE%A1%E8%AE%B0%E5%BD%95%E8%A6%81%E5%AE%8C%E6%95%B4"><span class="toc-number">7.4.</span> <span class="toc-text">4. 预审记录要完整</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E9%A1%B9%E7%9B%AE%E5%85%A8%E9%93%BE%E8%B7%AF%E5%AE%9E%E7%8E%B0"><span class="toc-number">8.</span> <span class="toc-text">八、项目全链路实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%99%E5%9C%A8%E6%9C%80%E5%90%8E"><span class="toc-number">9.</span> <span class="toc-text">写在最后</span></a></li></ol></div></div></div></div></main><footer id="footer" style="background-image: url('/media/cover/6.png')"><div id="footer-wrap"><div class="copyright">&copy;2023 - 2026 By AkiTomoyaL</div><div class="framework-info"><span>Framework </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo</a><span class="footer-separator">|</span><span>Theme </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly</a></div><div class="footer_custom_text">前方的区域请以后再来探索喵~</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="Read Mode"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="Toggle Between Traditional Chinese And Simplified Chinese">繁</button><button id="darkmode" type="button" title="Toggle Between Light And Dark Mode"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="Toggle between Single-column and Double-column"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="Setting"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="Table Of Contents"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="Back To Top"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/tw_cn.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"></div><script async src="/js/title.js"></script><script defer src="https://npm.elemecdn.com/jquery@latest/dist/jquery.min.js"></script><script defer data-pjax src="/js/nacho.js"></script><div class="aplayer no-destroy" data-id="2338077229" data-server="netease" data-type="playlist" data-fixed="true" data-autoplay="false" volume="0.15"> </div><script defer src="/js/cursor.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="30" mobile="true" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-nest.min.js"></script><script id="click-heart" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-heart.min.js" async="async" mobile="true"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/metingjs/dist/Meting.min.js"></script><script src="https://cdn.jsdelivr.net/npm/pjax/pjax.min.js"></script><script>let pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show","#web_bg",".js-pjax"]
+
+var pjax = new Pjax({
+  elements: 'a:not([target="_blank"])',
+  selectors: pjaxSelectors,
+  cacheBust: false,
+  analytics: false,
+  scrollRestoration: false
+})
+
+document.addEventListener('pjax:send', function () {
+
+  // removeEventListener
+  btf.removeGlobalFnEvent('pjax')
+  btf.removeGlobalFnEvent('themeChange')
+
+  document.getElementById('rightside').classList.remove('rightside-show')
+  
+  if (window.aplayers) {
+    for (let i = 0; i < window.aplayers.length; i++) {
+      if (!window.aplayers[i].options.fixed) {
+        window.aplayers[i].destroy()
+      }
+    }
+  }
+
+  typeof typed === 'object' && typed.destroy()
+
+  //reset readmode
+  const $bodyClassList = document.body.classList
+  $bodyClassList.contains('read-mode') && $bodyClassList.remove('read-mode')
+
+  typeof disqusjs === 'object' && disqusjs.destroy()
+})
+
+document.addEventListener('pjax:complete', function () {
+  window.refreshFn()
+
+  document.querySelectorAll('script[data-pjax]').forEach(item => {
+    const newScript = document.createElement('script')
+    const content = item.text || item.textContent || item.innerHTML || ""
+    Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+    newScript.appendChild(document.createTextNode(content))
+    item.parentNode.replaceChild(newScript, item)
+  })
+
+  GLOBAL_CONFIG.islazyload && window.lazyLoadInstance.update()
+
+  typeof panguInit === 'function' && panguInit()
+
+  // google analytics
+  typeof gtag === 'function' && gtag('config', '', {'page_path': window.location.pathname});
+
+  // baidu analytics
+  typeof _hmt === 'object' && _hmt.push(['_trackPageview',window.location.pathname]);
+
+  typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+
+  // prismjs
+  typeof Prism === 'object' && Prism.highlightAll()
+})
+
+document.addEventListener('pjax:error', e => {
+  if (e.request.status === 404) {
+    pjax.loadUrl('/404.html')
+  }
+})</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">Search</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="is-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  Loading the Database</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="Search for Posts" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">Search</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="is-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  Loading the Database</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="Search for Posts" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></body></html>
