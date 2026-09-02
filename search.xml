@@ -24,11 +24,11 @@
             
             <tag> RAG </tag>
             
-            <tag> Milvus </tag>
-            
             <tag> 检索优化 </tag>
             
             <tag> 结构化索引 </tag>
+            
+            <tag> Milvus </tag>
             
         </tags>
       
@@ -59,9 +59,9 @@
             
             <tag> Milvus </tag>
             
-            <tag> 智能体 </tag>
-            
             <tag> 工作记录 </tag>
+            
+            <tag> 智能体 </tag>
             
         </tags>
       
@@ -90,11 +90,11 @@
             
             <tag> 自动化 </tag>
             
-            <tag> 工作记录 </tag>
-            
             <tag> 巨量千川 </tag>
             
             <tag> Flask </tag>
+            
+            <tag> 工作记录 </tag>
             
         </tags>
       
@@ -214,9 +214,9 @@
       
         <tags>
             
-            <tag> 智能体 </tag>
-            
             <tag> 工作记录 </tag>
+            
+            <tag> 智能体 </tag>
             
             <tag> Dify </tag>
             
