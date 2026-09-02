@@ -1,0 +1,640 @@
+<!DOCTYPE html><html lang="zh_CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>RAG项目从0到1：从文档切片到Milvus检索的全链路实践 | AkiTomoyaL</title><meta name="author" content="AkiTomoyaL"><meta name="copyright" content="AkiTomoyaL"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="记录一次RAG项目从0到1的完整拆解：从文档解析、递归切片、Parent-Child召回，到Milvus向量库建模、混合检索、重排序、评估和工程化部署。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="RAG项目从0到1：从文档切片到Milvus检索的全链路实践">
+<meta property="og:url" content="https://akitomoyal.github.io/2026/09/01/rag_zero_to_one_milvus/index.html">
+<meta property="og:site_name" content="AkiTomoyaL">
+<meta property="og:description" content="记录一次RAG项目从0到1的完整拆解：从文档解析、递归切片、Parent-Child召回，到Milvus向量库建模、混合检索、重排序、评估和工程化部署。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://akitomoyal.github.io/media/cover/6.png">
+<meta property="article:published_time" content="2026-09-01T07:00:00.000Z">
+<meta property="article:modified_time" content="2026-09-01T07:00:00.000Z">
+<meta property="article:author" content="AkiTomoyaL">
+<meta property="article:tag" content="项目实践">
+<meta property="article:tag" content="RAG">
+<meta property="article:tag" content="Milvus">
+<meta property="article:tag" content="智能体">
+<meta property="article:tag" content="工作记录">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://akitomoyal.github.io/media/cover/6.png"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://akitomoyal.github.io/2026/09/01/rag_zero_to_one_milvus/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"languages":{"hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found"}},
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":210},
+  copy: {
+    success: 'Copy Successful',
+    error: 'Copy Error',
+    noSupport: 'Browser Not Supported'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: 'Just now',
+    min: 'minutes ago',
+    hour: 'hours ago',
+    day: 'days ago',
+    month: 'months ago'
+  },
+  copyright: {"limitCount":20,"languages":{"author":"Author: AkiTomoyaL","link":"Link: ","source":"Source: AkiTomoyaL","info":"Copyright is owned by the author. For commercial reprints, please contact the author for authorization. For non-commercial reprints, please indicate the source."}},
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: 'Load More'
+  },
+  isPhotoFigcaption: false,
+  islazyload: false,
+  isAnchor: true,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'RAG项目从0到1：从文档切片到Milvus检索的全链路实践',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: true,
+  isToc: true,
+  postUpdate: '2026-09-01 15:00:00'
+}</script><script>(win=>{
+      win.saveToLocal = {
+        set: (key, value, ttl) => {
+          if (ttl === 0) return
+          const now = Date.now()
+          const expiry = now + ttl * 86400000
+          const item = {
+            value,
+            expiry
+          }
+          localStorage.setItem(key, JSON.stringify(item))
+        },
+      
+        get: key => {
+          const itemStr = localStorage.getItem(key)
+      
+          if (!itemStr) {
+            return undefined
+          }
+          const item = JSON.parse(itemStr)
+          const now = Date.now()
+      
+          if (now > item.expiry) {
+            localStorage.removeItem(key)
+            return undefined
+          }
+          return item.value
+        }
+      }
+    
+      win.getScript = (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        script.onerror = reject
+        script.onload = script.onreadystatechange = function() {
+          const loadState = this.readyState
+          if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+          script.onload = script.onreadystatechange = null
+          resolve()
+        }
+
+        Object.keys(attr).forEach(key => {
+          script.setAttribute(key, attr[key])
+        })
+
+        document.head.appendChild(script)
+      })
+    
+      win.getCSS = (url, id = false) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onerror = reject
+        link.onload = link.onreadystatechange = function() {
+          const loadState = this.readyState
+          if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+          link.onload = link.onreadystatechange = null
+          resolve()
+        }
+        document.head.appendChild(link)
+      })
+    
+      win.activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          const now = new Date()
+          const hour = now.getHours()
+          const isNight = hour <= 6 || hour >= 18
+          if (t === undefined) isNight ? activateDarkMode() : activateLightMode()
+          else if (t === 'light') activateLightMode()
+          else activateDarkMode()
+        
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        if (asideStatus === 'hide') {
+          document.documentElement.classList.add('hide-aside')
+        } else {
+          document.documentElement.classList.remove('hide-aside')
+        }
+      }
+    
+      const detectApple = () => {
+        if(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)){
+          document.documentElement.classList.add('apple')
+        }
+      }
+      detectApple()
+    })(window)</script><link rel="stylesheet" href="/css/custom.css?1"><div id="myscoll"> </div><meta name="generator" content="Hexo 7.0.0"></head><body><div id="loading-box" onclick="document.getElementById(&quot;loading-box&quot;).classList.add(&quot;loaded&quot;)"><div class="loading-bg"><div class="loading-img"></div><div class="loading-image-dot"></div></div></div><script>const preloader = {
+  endLoading: () => {
+    document.body.style.overflow = 'auto';
+    document.getElementById('loading-box').classList.add("loaded")
+  },
+  initLoading: () => {
+    document.body.style.overflow = '';
+    document.getElementById('loading-box').classList.remove("loaded")
+
+  }
+}
+window.addEventListener('load',()=> { preloader.endLoading() })
+
+if (true) {
+  document.addEventListener('pjax:send', () => { preloader.initLoading() })
+  document.addEventListener('pjax:complete', () => { preloader.endLoading() })
+}</script><div id="web_bg"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img is-center"><img src="/img/avatar.jpg" onerror="onerror=null;src='/img/fri404.gif'" alt="avatar"/></div><div class="sidebar-site-data site-data is-center"><a href="/archives/"><div class="headline">Articles</div><div class="length-num">10</div></a><a href="/tags/"><div class="headline">Tags</div><div class="length-num">21</div></a><a href="/categories/"><div class="headline">Categories</div><div class="length-num">3</div></a></div><hr class="custom-hr"/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page group hide" href="javascript:void(0);"><i class="fa-fw fas fa-list"></i><span> 列表</span><i class="fas fa-chevron-down"></i></a><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> 音乐</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 档案</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 传送门</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('/media/cover/6.png')"><nav id="nav"><span id="blog-info"><a href="/" title="AkiTomoyaL"><span class="site-name">AkiTomoyaL</span></a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search" href="javascript:void(0);"><i class="fas fa-search fa-fw"></i></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page group hide" href="javascript:void(0);"><i class="fa-fw fas fa-list"></i><span> 列表</span><i class="fas fa-chevron-down"></i></a><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> 音乐</span></a></li><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 档案</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 传送门</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><a class="site-page" href="javascript:void(0);"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">RAG项目从0到1：从文档切片到Milvus检索的全链路实践</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">Created</span><time class="post-meta-date-created" datetime="2026-09-01T07:00:00.000Z" title="Created 2026-09-01 15:00:00">2026-09-01</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">Updated</span><time class="post-meta-date-updated" datetime="2026-09-01T07:00:00.000Z" title="Updated 2026-09-01 15:00:00">2026-09-01</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">Word Count:</span><span class="word-count">5.2k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">Reading Time:</span><span>17mins</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="RAG项目从0到1：从文档切片到Milvus检索的全链路实践"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">Post Views:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><mark class="hl-label blue">不拒众流，方为江海</mark> 
+
+<blockquote>
+<p>最近又系统看了一遍 RAG 项目的完整链路。感觉 RAG 这东西看起来就是“把文档丢进去，然后问答”，实际落地时每一步都能踩坑：文档怎么切、向量怎么存、检索怎么召回、答案怎么不胡说，最后还得能评估、能上线、能维护。</p>
+</blockquote>
+<p>好耶！<img class="inline-img" src="/pageimg/haoye1.gif" style="height:80px" /></p>
+<p>这篇就按项目复盘的方式写一下：如果要从 0 到 1 做一个 RAG 知识库问答项目，完整链路应该怎么拆。<br>其中向量数据库这块，我会重点用 <strong>Milvus</strong> 来讲一下实践思路。Milvus 主要负责向量存储、索引和过滤检索；后面的重排序、Prompt 组装和 LLM 生成，是 RAG 在线链路里的后续阶段。</p>
+<hr>
+<h2 id="一、这算不算一篇-RAG-从-0-到-1-的文档？"><a href="#一、这算不算一篇-RAG-从-0-到-1-的文档？" class="headerlink" title="一、这算不算一篇 RAG 从 0 到 1 的文档？"></a>一、这算不算一篇 RAG 从 0 到 1 的文档？</h2><p>算，但更准确地说，它是一篇 <strong>RAG 项目全链路路线图</strong>。</p>
+<p>因为一个完整 RAG 项目不只是“调一个大模型接口”，它至少要覆盖下面几件事：</p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>核心问题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>文档处理</td>
+<td>PDF、Word、网页、表格怎么解析，元数据怎么保留</td>
+</tr>
+<tr>
+<td>文本切片</td>
+<td>chunk 多大合适，标题层级怎么保留，父子块怎么设计</td>
+</tr>
+<tr>
+<td>向量入库</td>
+<td>embedding 怎么选，向量库怎么建 schema 和索引</td>
+</tr>
+<tr>
+<td>在线检索</td>
+<td>关键词、向量、过滤条件怎么组合，召回多少合适</td>
+</tr>
+<tr>
+<td>重排序</td>
+<td>初召回结果怎么二次排序，避免相似但不相关</td>
+</tr>
+<tr>
+<td>生成回答</td>
+<td>Prompt 怎么约束引用，怎么处理“知识库没有答案”</td>
+</tr>
+<tr>
+<td>评估优化</td>
+<td>怎么看命中率、答案准确性、延迟和成本</td>
+</tr>
+<tr>
+<td>工程部署</td>
+<td>增量更新、权限隔离、日志监控、灰度发布怎么做</td>
+</tr>
+</tbody></table>
+<p>所以我理解的 RAG 从 0 到 1，不是单个 demo，而是一条这样的生产链路：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">原始文档</span><br><span class="line">  -&gt; 文档解析</span><br><span class="line">  -&gt; 清洗与结构化</span><br><span class="line">  -&gt; 文本切片</span><br><span class="line">  -&gt; Embedding</span><br><span class="line">  -&gt; Milvus 向量库</span><br><span class="line">  -&gt; 混合检索</span><br><span class="line">  -&gt; 重排序</span><br><span class="line">  -&gt; Prompt 组装</span><br><span class="line">  -&gt; LLM 生成</span><br><span class="line">  -&gt; 引用溯源 / 日志 / 评估</span><br></pre></td></tr></table></figure>
+
+<div class="note info modern"><p>RAG 的核心不是“让模型变聪明”，而是让模型回答前先去查可靠资料。它解决的是知识更新、私有数据、可溯源回答这三个问题。</p>
+</div>
+
+<hr>
+<h2 id="二、先说清楚-RAG-要解决什么"><a href="#二、先说清楚-RAG-要解决什么" class="headerlink" title="二、先说清楚 RAG 要解决什么"></a>二、先说清楚 RAG 要解决什么</h2><p>很多业务场景里，大模型原本有三个硬伤：</p>
+<ul>
+<li><strong>不知道私有资料</strong>：公司制度、产品文档、客户 SOP、接口说明，它训练时没见过；</li>
+<li><strong>知识会过期</strong>：业务规则今天改，模型不可能自动同步；</li>
+<li><strong>回答没依据</strong>：即使答对了，也很难说明它参考了哪一段资料。</li>
+</ul>
+<p>RAG 的思路就比较朴素：</p>
+<ol>
+<li>先把业务文档整理成知识库；</li>
+<li>用户提问时，先从知识库里检索相关片段；</li>
+<li>把检索结果塞进 Prompt；</li>
+<li>让大模型基于这些片段回答；</li>
+<li>最后返回答案和引用来源。</li>
+</ol>
+<p>换句话说，RAG 项目做的是一套“先查资料再回答”的系统。</p>
+<p>这也是为什么我觉得它特别适合这些场景：</p>
+<ul>
+<li>企业内部制度问答；</li>
+<li>产品手册 &#x2F; API 文档问答；</li>
+<li>客服知识库；</li>
+<li>合同、招标文件、政策文件查询；</li>
+<li>Agent 执行业务前的知识补全；</li>
+<li>Text2SQL 前的表结构和指标口径检索。</li>
+</ul>
+<hr>
+<h2 id="三、知识库构建：别急着向量化"><a href="#三、知识库构建：别急着向量化" class="headerlink" title="三、知识库构建：别急着向量化"></a>三、知识库构建：别急着向量化</h2><p>很多 RAG demo 会直接把一段文本切块、embedding、入库，然后就开始问答。<br>但真实项目里，第一步其实是文档解析。</p>
+<h3 id="1-文档解析要保留结构"><a href="#1-文档解析要保留结构" class="headerlink" title="1. 文档解析要保留结构"></a>1. 文档解析要保留结构</h3><p>RAG 里最怕一种情况：原文档结构很清楚，解析完变成一坨纯文本。</p>
+<p>比如一个产品手册原本长这样：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">3. 退款规则</span><br><span class="line">  3.1 普通订单退款</span><br><span class="line">  3.2 预售订单退款</span><br><span class="line">  3.3 跨境订单退款</span><br></pre></td></tr></table></figure>
+
+<p>如果解析后标题层级丢了，模型检索到“退款”相关片段时，就很难判断这段到底属于哪种订单。</p>
+<p>所以解析时建议尽量保留：</p>
+<ul>
+<li>标题层级；</li>
+<li>段落顺序；</li>
+<li>表格内容；</li>
+<li>图片 &#x2F; 附件说明；</li>
+<li>页码、章节、文档来源；</li>
+<li>更新时间、业务线、权限范围等元数据。</li>
+</ul>
+<p>这些元数据后面会非常有用。比如检索时可以过滤“只查客服知识库”“只查 2026 年后的文档”“只查某个产品线”。</p>
+<h3 id="2-表格不要粗暴转文本"><a href="#2-表格不要粗暴转文本" class="headerlink" title="2. 表格不要粗暴转文本"></a>2. 表格不要粗暴转文本</h3><p>表格是 RAG 里很容易翻车的部分。</p>
+<p>比如价格表、字段说明、接口参数表，如果直接按行拼成文本，模型有时会把列关系搞混。更稳的做法是：</p>
+<ul>
+<li>简单表格：转成 Markdown table；</li>
+<li>参数表：保留字段名、类型、是否必填、说明；</li>
+<li>财务 &#x2F; 统计类表格：必要时单独走结构化查询，不要硬塞进普通 RAG；</li>
+<li>大表格：拆成小表或按业务主键建索引。</li>
+</ul>
+<div class="note warning modern"><p>RAG 不是万能文件阅读器。结构化数据太强的场景，比如明细账、库存表、订单表，很多时候 Text2SQL &#x2F; 数据库查询会比向量检索靠谱。</p>
+</div>
+
+<hr>
+<h2 id="四、文本切片：chunk-决定检索上限"><a href="#四、文本切片：chunk-决定检索上限" class="headerlink" title="四、文本切片：chunk 决定检索上限"></a>四、文本切片：chunk 决定检索上限</h2><p>切片是 RAG 里最不起眼、但影响特别大的环节。</p>
+<p>切得太大：</p>
+<ul>
+<li>一个 chunk 里混了太多主题；</li>
+<li>检索命中后上下文浪费；</li>
+<li>Prompt 成本变高；</li>
+<li>重排序也更难判断相关性。</li>
+</ul>
+<p>切得太小：</p>
+<ul>
+<li>语义不完整；</li>
+<li>答案需要跨多个片段拼；</li>
+<li>模型拿到的上下文断断续续；</li>
+<li>很容易答得像“只看了半句话”。</li>
+</ul>
+<h3 id="1-推荐递归切分"><a href="#1-推荐递归切分" class="headerlink" title="1. 推荐递归切分"></a>1. 推荐递归切分</h3><p>比较通用的方式是递归切分，也就是按自然结构一层层拆：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">文档</span><br><span class="line">  -&gt; 章节</span><br><span class="line">  -&gt; 小节</span><br><span class="line">  -&gt; 段落</span><br><span class="line">  -&gt; 句子</span><br></pre></td></tr></table></figure>
+
+<p>优先按标题、段落、换行这些自然边界切。只有超过长度限制时，再继续往下拆。<br>这样切出来的片段通常比固定字符数硬切更稳。</p>
+<p>我一般会先用类似这样的参数起步：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">chunk_size: 500 ~ 1000 中文字符</span><br><span class="line">chunk_overlap: 80 ~ 150 中文字符</span><br></pre></td></tr></table></figure>
+
+<p>当然这不是标准答案。技术文档、客服 FAQ、合同条款、论文，适合的 chunk 大小都不一样，最后还是要靠评估数据调。</p>
+<h3 id="2-Parent-Child-方案很实用"><a href="#2-Parent-Child-方案很实用" class="headerlink" title="2. Parent-Child 方案很实用"></a>2. Parent-Child 方案很实用</h3><p>还有一个我比较喜欢的方案：<strong>Parent-Child Chunk</strong>。</p>
+<p>简单说就是：</p>
+<ul>
+<li>child chunk：切得小一点，用来做精准召回；</li>
+<li>parent chunk：保留更完整的上下文，用来喂给模型生成。</li>
+</ul>
+<p>流程大概是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">用户问题</span><br><span class="line">  -&gt; 检索 child chunk</span><br><span class="line">  -&gt; 找到对应 parent chunk</span><br><span class="line">  -&gt; 把 parent chunk 放进 Prompt</span><br><span class="line">  -&gt; 生成答案</span><br></pre></td></tr></table></figure>
+
+<p>这么做的好处是：检索时足够精准，生成时上下文又不会太碎。</p>
+<p>比如用户问“预售订单退款多久到账”，child chunk 可能只命中一小段规则；但最终给模型的 parent chunk 可以包含整个“预售订单退款规则”小节，回答会完整很多。</p>
+<hr>
+<h2 id="五、Embedding：别只看榜单"><a href="#五、Embedding：别只看榜单" class="headerlink" title="五、Embedding：别只看榜单"></a>五、Embedding：别只看榜单</h2><p>Embedding 模型负责把文本转成向量。<br>向量越能表达语义，后面检索越容易命中正确内容。</p>
+<p>选 embedding 模型时，我会看几个点：</p>
+<ul>
+<li>中文效果怎么样；</li>
+<li>维度是多少；</li>
+<li>最大输入长度；</li>
+<li>成本和延迟；</li>
+<li>是否支持私有化部署；</li>
+<li>和向量库索引参数是否匹配；</li>
+<li>是否需要 query &#x2F; passage 不同前缀。</li>
+</ul>
+<p>业务早期可以先用一个稳定模型跑通链路，不要一开始就陷入模型横评。<br>等检索样本积累起来，再拿真实问题做评估：同一批 query，看看 top-k 是否命中正确答案片段。</p>
+<hr>
+<h2 id="六、向量数据库：为什么这里用-Milvus"><a href="#六、向量数据库：为什么这里用-Milvus" class="headerlink" title="六、向量数据库：为什么这里用 Milvus"></a>六、向量数据库：为什么这里用 Milvus</h2><p>向量数据库的作用是：存储 embedding，并支持高效相似度检索。</p>
+<p>先把边界说清楚：<strong>Milvus 不负责替你生成答案，也不等于 reranker</strong>。<br>它在 RAG 里主要承担“把候选知识片段又快又准地召回”的角色。召回之后，通常还会接一层 reranker，再把筛好的上下文交给 LLM 生成回答。</p>
+<p>如果只是本地 demo，FAISS、Chroma、SQLite 扩展都能玩。<br>但如果考虑工程化，比如数据量上来、要服务化、要增量更新、要过滤元数据、要调索引参数，Milvus 会更适合做一个正式知识库底座。</p>
+<p>Milvus 适合 RAG 的点主要有：</p>
+<ul>
+<li>支持向量字段和标量字段一起建模；</li>
+<li>支持 HNSW、IVF_FLAT 等索引；</li>
+<li>支持按元数据过滤；</li>
+<li>支持批量插入和搜索；</li>
+<li>可以本地 Docker 启动，也能往集群扩；</li>
+<li>Python SDK 上手比较直接。</li>
+</ul>
+<h3 id="1-RAG-里建议这样设计-Schema"><a href="#1-RAG-里建议这样设计-Schema" class="headerlink" title="1. RAG 里建议这样设计 Schema"></a>1. RAG 里建议这样设计 Schema</h3><p>不要只存一个 <code>embedding</code> 和 <code>text</code>。<br>真正线上用时，最好把溯源和过滤字段也放进去。</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">collection: rag_chunks</span><br><span class="line"></span><br><span class="line">id              主键</span><br><span class="line">doc_id          文档 ID</span><br><span class="line">chunk_id        片段 ID</span><br><span class="line">parent_id       父块 ID</span><br><span class="line">text            当前片段文本</span><br><span class="line">parent_text     父块文本，可选</span><br><span class="line">source          文档来源</span><br><span class="line">category        业务分类</span><br><span class="line">updated_at      更新时间</span><br><span class="line">embedding       向量字段</span><br></pre></td></tr></table></figure>
+
+<p>这样后面就能做：</p>
+<ul>
+<li>只查某个业务分类；</li>
+<li>返回答案时带来源；</li>
+<li>文档更新时按 <code>doc_id</code> 删除旧 chunk；</li>
+<li>child chunk 命中后回填 parent chunk；</li>
+<li>分析哪些文档经常被命中，哪些从来没被查到。</li>
+</ul>
+<h3 id="2-用-Milvus-建一个-Collection"><a href="#2-用-Milvus-建一个-Collection" class="headerlink" title="2. 用 Milvus 建一个 Collection"></a>2. 用 Milvus 建一个 Collection</h3><p>下面是一个偏工程化的示例。实际维度要和你的 embedding 模型一致，比如 768、1024、1536 等。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> pymilvus <span class="keyword">import</span> DataType, MilvusClient</span><br><span class="line"></span><br><span class="line">client = MilvusClient(uri=<span class="string">&quot;http://localhost:19530&quot;</span>)</span><br><span class="line"></span><br><span class="line">schema = MilvusClient.create_schema(</span><br><span class="line">    auto_id=<span class="literal">False</span>,</span><br><span class="line">    enable_dynamic_field=<span class="literal">False</span>,</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line">schema.add_field(<span class="string">&quot;id&quot;</span>, DataType.VARCHAR, is_primary=<span class="literal">True</span>, max_length=<span class="number">128</span>)</span><br><span class="line">schema.add_field(<span class="string">&quot;doc_id&quot;</span>, DataType.VARCHAR, max_length=<span class="number">128</span>)</span><br><span class="line">schema.add_field(<span class="string">&quot;chunk_id&quot;</span>, DataType.VARCHAR, max_length=<span class="number">128</span>)</span><br><span class="line">schema.add_field(<span class="string">&quot;parent_id&quot;</span>, DataType.VARCHAR, max_length=<span class="number">128</span>)</span><br><span class="line">schema.add_field(<span class="string">&quot;text&quot;</span>, DataType.VARCHAR, max_length=<span class="number">4096</span>)</span><br><span class="line">schema.add_field(<span class="string">&quot;source&quot;</span>, DataType.VARCHAR, max_length=<span class="number">512</span>)</span><br><span class="line">schema.add_field(<span class="string">&quot;category&quot;</span>, DataType.VARCHAR, max_length=<span class="number">64</span>)</span><br><span class="line">schema.add_field(<span class="string">&quot;updated_at&quot;</span>, DataType.INT64)</span><br><span class="line">schema.add_field(<span class="string">&quot;embedding&quot;</span>, DataType.FLOAT_VECTOR, dim=<span class="number">1024</span>)</span><br><span class="line"></span><br><span class="line">index_params = client.prepare_index_params()</span><br><span class="line">index_params.add_index(</span><br><span class="line">    field_name=<span class="string">&quot;embedding&quot;</span>,</span><br><span class="line">    index_type=<span class="string">&quot;HNSW&quot;</span>,</span><br><span class="line">    metric_type=<span class="string">&quot;COSINE&quot;</span>,</span><br><span class="line">    params=&#123;</span><br><span class="line">        <span class="string">&quot;M&quot;</span>: <span class="number">16</span>,</span><br><span class="line">        <span class="string">&quot;efConstruction&quot;</span>: <span class="number">200</span>,</span><br><span class="line">    &#125;,</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line">client.create_collection(</span><br><span class="line">    collection_name=<span class="string">&quot;rag_chunks&quot;</span>,</span><br><span class="line">    schema=schema,</span><br><span class="line">    index_params=index_params,</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p>这里有几个点要注意：</p>
+<ul>
+<li><code>metric_type</code> 要和 embedding 使用方式匹配，RAG 里常见的是 <code>COSINE</code>；</li>
+<li><code>dim</code> 必须和 embedding 输出维度一致；</li>
+<li><code>doc_id</code>、<code>category</code> 这类字段后面会用于过滤和增量更新；</li>
+<li><code>text</code> 字段长度要留够，但也别把超大 parent 文本全塞进一个字段。</li>
+</ul>
+<h3 id="3-插入-chunk"><a href="#3-插入-chunk" class="headerlink" title="3. 插入 chunk"></a>3. 插入 chunk</h3><p>入库时要保证文本、向量、元数据一一对应。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">rows = [</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="string">&quot;id&quot;</span>: <span class="string">&quot;refund_doc_001_chunk_0001&quot;</span>,</span><br><span class="line">        <span class="string">&quot;doc_id&quot;</span>: <span class="string">&quot;refund_doc_001&quot;</span>,</span><br><span class="line">        <span class="string">&quot;chunk_id&quot;</span>: <span class="string">&quot;chunk_0001&quot;</span>,</span><br><span class="line">        <span class="string">&quot;parent_id&quot;</span>: <span class="string">&quot;section_3_2&quot;</span>,</span><br><span class="line">        <span class="string">&quot;text&quot;</span>: <span class="string">&quot;预售订单退款一般会在审核通过后按原支付路径退回...&quot;</span>,</span><br><span class="line">        <span class="string">&quot;source&quot;</span>: <span class="string">&quot;售后规则手册.pdf#p12&quot;</span>,</span><br><span class="line">        <span class="string">&quot;category&quot;</span>: <span class="string">&quot;after_sales&quot;</span>,</span><br><span class="line">        <span class="string">&quot;updated_at&quot;</span>: <span class="number">1788303600</span>,</span><br><span class="line">        <span class="string">&quot;embedding&quot;</span>: embedding_vector,</span><br><span class="line">    &#125;</span><br><span class="line">]</span><br><span class="line"></span><br><span class="line">client.insert(</span><br><span class="line">    collection_name=<span class="string">&quot;rag_chunks&quot;</span>,</span><br><span class="line">    data=rows,</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p>我建议入库前先做一层校验：</p>
+<ul>
+<li>空文本不要入库；</li>
+<li>太短的目录、页眉、页脚不要入库；</li>
+<li>embedding 失败的 chunk 单独记录；</li>
+<li>同一个 <code>doc_id</code> 重建时，先删除旧 chunk 再插入新 chunk；</li>
+<li>每次构建保留批次号，方便回滚。</li>
+</ul>
+<h3 id="4-检索时加过滤条件"><a href="#4-检索时加过滤条件" class="headerlink" title="4. 检索时加过滤条件"></a>4. 检索时加过滤条件</h3><p>不要所有知识混在一起查。<br>比如客服问题只查客服知识库，技术问题只查技术文档，权限不同的人只查自己能看的资料。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">results = client.search(</span><br><span class="line">    collection_name=<span class="string">&quot;rag_chunks&quot;</span>,</span><br><span class="line">    data=[query_embedding],</span><br><span class="line">    anns_field=<span class="string">&quot;embedding&quot;</span>,</span><br><span class="line">    limit=<span class="number">20</span>,</span><br><span class="line">    <span class="built_in">filter</span>=<span class="string">&#x27;category == &quot;after_sales&quot;&#x27;</span>,</span><br><span class="line">    search_params=&#123;</span><br><span class="line">        <span class="string">&quot;metric_type&quot;</span>: <span class="string">&quot;COSINE&quot;</span>,</span><br><span class="line">        <span class="string">&quot;params&quot;</span>: &#123;</span><br><span class="line">            <span class="string">&quot;ef&quot;</span>: <span class="number">64</span>,</span><br><span class="line">        &#125;,</span><br><span class="line">    &#125;,</span><br><span class="line">    output_fields=[<span class="string">&quot;doc_id&quot;</span>, <span class="string">&quot;chunk_id&quot;</span>, <span class="string">&quot;parent_id&quot;</span>, <span class="string">&quot;text&quot;</span>, <span class="string">&quot;source&quot;</span>],</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p><code>limit=20</code> 不代表最后把 20 个片段都塞给模型。<br>一般是先多召回一点，再交给 reranker 二次排序，最后挑 3 ~ 8 个高质量片段进 Prompt。</p>
+<div class="note success modern"><p>Milvus 这块别只当“向量存储”用。Schema、索引、过滤条件、增量更新、命中日志，才是它在 RAG 项目里真正发挥作用的地方。</p>
+</div>
+
+<hr>
+<h2 id="七、在线检索：别只靠向量相似度"><a href="#七、在线检索：别只靠向量相似度" class="headerlink" title="七、在线检索：别只靠向量相似度"></a>七、在线检索：别只靠向量相似度</h2><p>向量检索擅长语义相似，但它不是所有问题都稳。</p>
+<p>比如用户问：</p>
+<blockquote>
+<p>「BD339D 这个款式的退款规则是什么？」</p>
+</blockquote>
+<p><code>BD339D</code> 这种编码对向量模型来说不一定有语义。<br>如果只靠向量检索，可能会召回一堆“退款规则”，但漏掉这个精确款式。</p>
+<p>所以线上 RAG 通常会做 <strong>混合检索</strong>：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">用户问题</span><br><span class="line">  -&gt; query rewrite / 意图识别</span><br><span class="line">  -&gt; 关键词检索：适合编号、名称、精确词</span><br><span class="line">  -&gt; 向量检索：适合语义问题</span><br><span class="line">  -&gt; 元数据过滤：限制业务线、权限、时间</span><br><span class="line">  -&gt; 结果合并</span><br><span class="line">  -&gt; reranker 重排序</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-Query-Rewrite"><a href="#1-Query-Rewrite" class="headerlink" title="1. Query Rewrite"></a>1. Query Rewrite</h3><p>用户问的问题经常很短：</p>
+<ul>
+<li>“这个怎么处理？”</li>
+<li>“要多久？”</li>
+<li>“能退吗？”</li>
+</ul>
+<p>如果直接拿去检索，效果通常一般。<br>可以先做一次 query rewrite，把上下文补上：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">原问题：能退吗？</span><br><span class="line">会话上下文：用户正在咨询预售订单售后</span><br><span class="line">改写后：预售订单是否支持退款，退款条件和到账时间是什么？</span><br></pre></td></tr></table></figure>
+
+<p>注意，query rewrite 不是让模型自由发挥，而是把检索意图补完整。</p>
+<h3 id="2-Reranker-很关键"><a href="#2-Reranker-很关键" class="headerlink" title="2. Reranker 很关键"></a>2. Reranker 很关键</h3><p>初召回阶段宁愿多召回一点，然后用 reranker 精排。</p>
+<p>向量 top-k 经常会出现这种情况：</p>
+<ul>
+<li>语义很像，但不是同一业务；</li>
+<li>关键词命中了，但上下文不相关；</li>
+<li>同一文档多个 chunk 都被召回，内容重复；</li>
+<li>老版本文档和新版本文档同时出现。</li>
+</ul>
+<p>reranker 可以把“问题 + 候选片段”放在一起重新打分，比单纯向量距离更贴近最终问答效果。</p>
+<p>最后进 Prompt 的片段，我一般会做几层处理：</p>
+<ol>
+<li>去重；</li>
+<li>按分数排序；</li>
+<li>优先保留新版本；</li>
+<li>控制总 token；</li>
+<li>带上来源信息。</li>
+</ol>
+<hr>
+<h2 id="八、生成阶段：Prompt-要有边界"><a href="#八、生成阶段：Prompt-要有边界" class="headerlink" title="八、生成阶段：Prompt 要有边界"></a>八、生成阶段：Prompt 要有边界</h2><p>RAG 的生成 Prompt 不能写成“请根据以下资料回答”。<br>这太宽了，模型很容易一边参考资料，一边自己补常识。</p>
+<p>我更喜欢把规则写清楚：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">你是企业知识库助手。</span><br><span class="line">请只基于【参考资料】回答用户问题。</span><br><span class="line">如果资料中没有答案，请明确说“当前知识库没有找到依据”，不要编造。</span><br><span class="line">回答时尽量给出简洁结论，并在关键结论后标注来源。</span><br></pre></td></tr></table></figure>
+
+<p>然后上下文可以这样组织：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">【用户问题】</span><br><span class="line">预售订单退款多久到账？</span><br><span class="line"></span><br><span class="line">【参考资料 1】</span><br><span class="line">来源：售后规则手册.pdf#p12</span><br><span class="line">内容：...</span><br><span class="line"></span><br><span class="line">【参考资料 2】</span><br><span class="line">来源：客服SOP.md#预售退款</span><br><span class="line">内容：...</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-要允许它说“不知道”"><a href="#1-要允许它说“不知道”" class="headerlink" title="1. 要允许它说“不知道”"></a>1. 要允许它说“不知道”</h3><p>RAG 项目上线后，最危险的不是模型不会答，而是它没查到还硬答。</p>
+<p>所以 Prompt 里一定要明确：</p>
+<ul>
+<li>没有依据就说没找到；</li>
+<li>资料冲突时说明冲突；</li>
+<li>不要把推测说成制度；</li>
+<li>高风险问题可以转人工；</li>
+<li>答案要尽量带来源。</li>
+</ul>
+<h3 id="2-引用不是装饰"><a href="#2-引用不是装饰" class="headerlink" title="2. 引用不是装饰"></a>2. 引用不是装饰</h3><p>如果是企业内部知识库，引用来源特别重要。<br>它能让用户知道答案来自哪份文档，也方便后面排查问题：</p>
+<ul>
+<li>是文档过期？</li>
+<li>是切片错了？</li>
+<li>是检索没命中？</li>
+<li>是 reranker 排错了？</li>
+<li>还是模型生成时理解歪了？</li>
+</ul>
+<p>RAG 的可维护性，很大一部分就靠这条溯源链路。</p>
+<hr>
+<h2 id="九、评估：不要只靠感觉"><a href="#九、评估：不要只靠感觉" class="headerlink" title="九、评估：不要只靠感觉"></a>九、评估：不要只靠感觉</h2><p>RAG 很容易出现一种错觉：<br>自己随便问几个问题，感觉答得还行，就以为系统能用了。</p>
+<p>但真实上线后，用户问法会特别散。<br>所以最好准备一批评估集：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>看什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Recall@K</td>
+<td>正确片段有没有被召回</td>
+</tr>
+<tr>
+<td>MRR</td>
+<td>正确片段排得靠不靠前</td>
+</tr>
+<tr>
+<td>Answer Accuracy</td>
+<td>最终答案是否正确</td>
+</tr>
+<tr>
+<td>Faithfulness</td>
+<td>答案是否真的来自参考资料</td>
+</tr>
+<tr>
+<td>Latency</td>
+<td>检索、重排、生成分别耗时多少</td>
+</tr>
+<tr>
+<td>Cost</td>
+<td>embedding、rerank、LLM 成本</td>
+</tr>
+<tr>
+<td>No-answer</td>
+<td>查不到时是否能拒答</td>
+</tr>
+</tbody></table>
+<p>我觉得最小可用评估集可以这样做：</p>
+<ol>
+<li>从真实业务问题里整理 50 ~ 100 个 query；</li>
+<li>人工标注每个问题应该命中的文档片段；</li>
+<li>每次调整 chunk、embedding、索引、reranker 时跑一遍；</li>
+<li>记录 top-k 命中率和最终答案质量；</li>
+<li>发现坏例子就归类：解析问题、切片问题、检索问题、生成问题。</li>
+</ol>
+<div class="note info modern"><p>RAG 优化不要全靠调 Prompt。很多回答不好，其实是前面检索没把正确资料拿回来。资料没进 Prompt，模型再聪明也只能猜。</p>
+</div>
+
+<hr>
+<h2 id="十、工程化：上线后才是真正开始"><a href="#十、工程化：上线后才是真正开始" class="headerlink" title="十、工程化：上线后才是真正开始"></a>十、工程化：上线后才是真正开始</h2><p>如果只是 demo，RAG 很快能做出来。<br>但如果要长期用，工程化部分不能省。</p>
+<h3 id="1-文档增量更新"><a href="#1-文档增量更新" class="headerlink" title="1. 文档增量更新"></a>1. 文档增量更新</h3><p>文档不是一次性导入就结束。业务文档会更新、删除、改名、换版本。</p>
+<p>建议设计一套索引任务：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">扫描文档</span><br><span class="line">  -&gt; 计算文件 hash</span><br><span class="line">  -&gt; 找出新增 / 修改 / 删除</span><br><span class="line">  -&gt; 删除旧 chunk</span><br><span class="line">  -&gt; 重新解析和切片</span><br><span class="line">  -&gt; 重新 embedding</span><br><span class="line">  -&gt; 写入 Milvus</span><br><span class="line">  -&gt; 记录构建批次和日志</span><br></pre></td></tr></table></figure>
+
+<p>这样就能避免知识库里同时存在新旧两套答案。</p>
+<h3 id="2-权限隔离"><a href="#2-权限隔离" class="headerlink" title="2. 权限隔离"></a>2. 权限隔离</h3><p>企业知识库最容易被忽略的是权限。</p>
+<p>检索阶段就应该把权限过滤加进去，而不是等生成完再挡。<br>比如 Milvus 里可以存：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">department: &quot;after_sales&quot;</span><br><span class="line">tenant_id: &quot;company_a&quot;</span><br><span class="line">permission_level: 2</span><br></pre></td></tr></table></figure>
+
+<p>检索时按用户身份拼过滤条件：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tenant_id == &quot;company_a&quot; and permission_level &lt;= 2</span><br></pre></td></tr></table></figure>
+
+<p>这样可以从源头避免越权召回。</p>
+<h3 id="3-日志要记录到-chunk-级别"><a href="#3-日志要记录到-chunk-级别" class="headerlink" title="3. 日志要记录到 chunk 级别"></a>3. 日志要记录到 chunk 级别</h3><p>一次问答最好记录：</p>
+<ul>
+<li>原始问题；</li>
+<li>改写后的问题；</li>
+<li>检索参数；</li>
+<li>召回的 chunk_id；</li>
+<li>reranker 分数；</li>
+<li>最终进入 Prompt 的片段；</li>
+<li>LLM 输出；</li>
+<li>用户反馈。</li>
+</ul>
+<p>后面排查坏 case 时，能直接知道问题出在哪一层。</p>
+<hr>
+<h2 id="十一、RAG-项目全链路实现"><a href="#十一、RAG-项目全链路实现" class="headerlink" title="十一、RAG 项目全链路实现"></a>十一、RAG 项目全链路实现</h2><p>如果把这篇收成一张 checklist，大概就是：</p>
+<ol>
+<li>明确业务边界：知识库问答、客服答疑、文档检索，还是 Agent 辅助决策；</li>
+<li>文档解析：保留标题、段落、表格、页码、来源和更新时间；</li>
+<li>清洗规则：去掉页眉页脚、目录噪音、重复内容和空片段；</li>
+<li>切片策略：优先递归切分，复杂场景用 Parent-Child；</li>
+<li>Embedding：先选稳定模型跑通，再用真实 query 评估；</li>
+<li>向量库：Milvus 建 collection、schema、索引和元数据字段；</li>
+<li>入库流程：批量插入、失败重试、doc_id 增量更新、批次记录；</li>
+<li>在线检索：query rewrite、关键词 + 向量混合检索、权限过滤；</li>
+<li>重排序：reranker 精排、去重、控制上下文长度；</li>
+<li>生成回答：Prompt 约束引用、允许拒答、资料冲突要说明；</li>
+<li>评估体系：Recall@K、答案准确性、faithfulness、延迟、成本；</li>
+<li>工程部署：日志、监控、反馈闭环、灰度发布、文档版本管理。</li>
+</ol>
+<p>能力上大概覆盖：<strong>文档工程 &#x2F; 向量数据库 &#x2F; 检索系统 &#x2F; Prompt 设计 &#x2F; LLM 应用评估 &#x2F; 后端工程化</strong>。</p>
+<hr>
+<h2 id="十二、几个我觉得最容易踩的坑"><a href="#十二、几个我觉得最容易踩的坑" class="headerlink" title="十二、几个我觉得最容易踩的坑"></a>十二、几个我觉得最容易踩的坑</h2><h3 id="1-文档没处理好，后面全白搭"><a href="#1-文档没处理好，后面全白搭" class="headerlink" title="1. 文档没处理好，后面全白搭"></a>1. 文档没处理好，后面全白搭</h3><p>RAG 的数据质量特别重要。<br>如果解析出来的文本本身就是乱的，后面 embedding、检索、rerank 都是在处理噪音。</p>
+<h3 id="2-chunk-不是越大越好"><a href="#2-chunk-不是越大越好" class="headerlink" title="2. chunk 不是越大越好"></a>2. chunk 不是越大越好</h3><p>大 chunk 看起来信息全，实际经常召回不准。<br>小 chunk 看起来精准，又容易丢上下文。Parent-Child 方案就是为了解这个矛盾。</p>
+<h3 id="3-向量检索不是全文搜索的替代品"><a href="#3-向量检索不是全文搜索的替代品" class="headerlink" title="3. 向量检索不是全文搜索的替代品"></a>3. 向量检索不是全文搜索的替代品</h3><p>编号、型号、人名、字段名、接口名这些精确词，关键词检索仍然很重要。<br>RAG 线上效果想稳，混合检索基本绕不开。</p>
+<h3 id="4-不要忽略“查不到”的体验"><a href="#4-不要忽略“查不到”的体验" class="headerlink" title="4. 不要忽略“查不到”的体验"></a>4. 不要忽略“查不到”的体验</h3><p>知识库没答案时，要让系统明确拒答或转人工。<br>否则用户最怕的不是“它不知道”，而是“它不知道但还很自信”。</p>
+<h3 id="5-评估集要尽早建"><a href="#5-评估集要尽早建" class="headerlink" title="5. 评估集要尽早建"></a>5. 评估集要尽早建</h3><p>没有评估集，就很难判断一次优化到底是变好了还是只是换了一种错法。<br>RAG 调参最好每次都有数据兜底。</p>
+<hr>
+<h2 id="写在最后"><a href="#写在最后" class="headerlink" title="写在最后"></a>写在最后</h2><p>RAG 项目看起来门槛不高，真正做起来才会发现，它不是一个单点技术，而是一条链路。</p>
+<p>文档解析决定知识能不能进来；切片决定检索能不能命中；Milvus 这类向量数据库决定知识能不能稳定查；reranker 决定上下文质量；Prompt 和评估决定最后答案能不能让人信。</p>
+<p>所以如果从 0 到 1 做 RAG，我会按这个顺序来：</p>
+<ol>
+<li>先把小规模知识库跑通；</li>
+<li>再补文档解析和切片质量；</li>
+<li>用 Milvus 把向量检索工程化；</li>
+<li>加混合检索和重排序；</li>
+<li>最后做评估、日志和增量更新。</li>
+</ol>
+<p>不要一上来就追求“大而全”。<br>先让一条真实业务问题能从文档里查到依据、生成答案、带回引用，这条链路跑通了，后面才有优化空间。</p>
+<blockquote>
+<p>行有所思，学有所得。—— AkiTomoyaL</p>
+</blockquote>
+<p><u class="pn">文档先干净</u><u class="pn">切片别乱切</u><u class="pn">Milvus 要会查</u><img class="inline-img" src="/pageimg/haoye2.gif" style="height:80px" />
+
+<hr>
+<p>参考资料：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://datawhalechina.github.io/all-in-rag/#/chapter3/09_milvus">Datawhale All in RAG：Milvus 实践</a></li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>Author: </span><span class="post-copyright-info"><a href="https://akitomoyal.github.io">AkiTomoyaL</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>Link: </span><span class="post-copyright-info"><a href="https://akitomoyal.github.io/2026/09/01/rag_zero_to_one_milvus/">https://akitomoyal.github.io/2026/09/01/rag_zero_to_one_milvus/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>Copyright Notice: </span><span class="post-copyright-info">All articles in this blog are licensed under <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> unless stating additionally.</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E9%A1%B9%E7%9B%AE%E5%AE%9E%E8%B7%B5/">项目实践</a><a class="post-meta__tags" href="/tags/RAG/">RAG</a><a class="post-meta__tags" href="/tags/Milvus/">Milvus</a><a class="post-meta__tags" href="/tags/%E6%99%BA%E8%83%BD%E4%BD%93/">智能体</a><a class="post-meta__tags" href="/tags/%E5%B7%A5%E4%BD%9C%E8%AE%B0%E5%BD%95/">工作记录</a></div><div class="post_share"><div class="social-share" data-image="/media/cover/6.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/2026/09/02/rag_retrieval_optimization_context_window/" title="RAG检索优化：上下文扩展为什么比单纯调chunk更有效"><img class="cover" src="/media/cover/22.png" onerror="onerror=null;src='/img/error.png'" alt="cover of previous post"><div class="pagination-info"><div class="label">Previous</div><div class="prev_info">RAG检索优化：上下文扩展为什么比单纯调chunk更有效</div></div></a></div><div class="next-post pull-right"><a href="/2026/08/19/qianchuan_auto_promotion/" title="千川自动化投流项目：从素材上传到 ROI 降档的全链路实践"><img class="cover" src="/media/cover/17.png" onerror="onerror=null;src='/img/error.png'" alt="cover of next post"><div class="pagination-info"><div class="label">Next</div><div class="next_info">千川自动化投流项目：从素材上传到 ROI 降档的全链路实践</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>Related Articles</span></div><div class="relatedPosts-list"><div><a href="/2026/09/02/rag_retrieval_optimization_context_window/" title="RAG检索优化：上下文扩展为什么比单纯调chunk更有效"><img class="cover" src="/media/cover/22.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-02</div><div class="title">RAG检索优化：上下文扩展为什么比单纯调chunk更有效</div></div></a></div><div><a href="/2026/07/24/wecom_ai_customer_service/" title="从 0 到 1：企业微信智能客服落地实践（LangGraph + RAG）"><img class="cover" src="/media/cover/20.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-24</div><div class="title">从 0 到 1：企业微信智能客服落地实践（LangGraph + RAG）</div></div></a></div><div><a href="/2026/08/19/qianchuan_auto_promotion/" title="千川自动化投流项目：从素材上传到 ROI 降档的全链路实践"><img class="cover" src="/media/cover/17.png" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-19</div><div class="title">千川自动化投流项目：从素材上传到 ROI 降档的全链路实践</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="is-center"><div class="avatar-img"><img src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/fri404.gif'" alt="avatar"/></div><div class="author-info__name">AkiTomoyaL</div><div class="author-info__description">一事无成的数学废物</div></div><div class="card-info-data site-data is-center"><a href="/archives/"><div class="headline">Articles</div><div class="length-num">10</div></a><a href="/tags/"><div class="headline">Tags</div><div class="length-num">21</div></a><a href="/categories/"><div class="headline">Categories</div><div class="length-num">3</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/AkiTomoyaL"><i class="fab fa-github"></i><span>魔法小屋</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>Announcement</span></div><div class="announcement_content">行有所思，学有所得</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>Contents</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E8%BF%99%E7%AE%97%E4%B8%8D%E7%AE%97%E4%B8%80%E7%AF%87-RAG-%E4%BB%8E-0-%E5%88%B0-1-%E7%9A%84%E6%96%87%E6%A1%A3%EF%BC%9F"><span class="toc-number">1.</span> <span class="toc-text">一、这算不算一篇 RAG 从 0 到 1 的文档？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E5%85%88%E8%AF%B4%E6%B8%85%E6%A5%9A-RAG-%E8%A6%81%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88"><span class="toc-number">2.</span> <span class="toc-text">二、先说清楚 RAG 要解决什么</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E7%9F%A5%E8%AF%86%E5%BA%93%E6%9E%84%E5%BB%BA%EF%BC%9A%E5%88%AB%E6%80%A5%E7%9D%80%E5%90%91%E9%87%8F%E5%8C%96"><span class="toc-number">3.</span> <span class="toc-text">三、知识库构建：别急着向量化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%96%87%E6%A1%A3%E8%A7%A3%E6%9E%90%E8%A6%81%E4%BF%9D%E7%95%99%E7%BB%93%E6%9E%84"><span class="toc-number">3.1.</span> <span class="toc-text">1. 文档解析要保留结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E8%A1%A8%E6%A0%BC%E4%B8%8D%E8%A6%81%E7%B2%97%E6%9A%B4%E8%BD%AC%E6%96%87%E6%9C%AC"><span class="toc-number">3.2.</span> <span class="toc-text">2. 表格不要粗暴转文本</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E6%96%87%E6%9C%AC%E5%88%87%E7%89%87%EF%BC%9Achunk-%E5%86%B3%E5%AE%9A%E6%A3%80%E7%B4%A2%E4%B8%8A%E9%99%90"><span class="toc-number">4.</span> <span class="toc-text">四、文本切片：chunk 决定检索上限</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%8E%A8%E8%8D%90%E9%80%92%E5%BD%92%E5%88%87%E5%88%86"><span class="toc-number">4.1.</span> <span class="toc-text">1. 推荐递归切分</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-Parent-Child-%E6%96%B9%E6%A1%88%E5%BE%88%E5%AE%9E%E7%94%A8"><span class="toc-number">4.2.</span> <span class="toc-text">2. Parent-Child 方案很实用</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81Embedding%EF%BC%9A%E5%88%AB%E5%8F%AA%E7%9C%8B%E6%A6%9C%E5%8D%95"><span class="toc-number">5.</span> <span class="toc-text">五、Embedding：别只看榜单</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E9%87%8C%E7%94%A8-Milvus"><span class="toc-number">6.</span> <span class="toc-text">六、向量数据库：为什么这里用 Milvus</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-RAG-%E9%87%8C%E5%BB%BA%E8%AE%AE%E8%BF%99%E6%A0%B7%E8%AE%BE%E8%AE%A1-Schema"><span class="toc-number">6.1.</span> <span class="toc-text">1. RAG 里建议这样设计 Schema</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E7%94%A8-Milvus-%E5%BB%BA%E4%B8%80%E4%B8%AA-Collection"><span class="toc-number">6.2.</span> <span class="toc-text">2. 用 Milvus 建一个 Collection</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E6%8F%92%E5%85%A5-chunk"><span class="toc-number">6.3.</span> <span class="toc-text">3. 插入 chunk</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E6%A3%80%E7%B4%A2%E6%97%B6%E5%8A%A0%E8%BF%87%E6%BB%A4%E6%9D%A1%E4%BB%B6"><span class="toc-number">6.4.</span> <span class="toc-text">4. 检索时加过滤条件</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E5%9C%A8%E7%BA%BF%E6%A3%80%E7%B4%A2%EF%BC%9A%E5%88%AB%E5%8F%AA%E9%9D%A0%E5%90%91%E9%87%8F%E7%9B%B8%E4%BC%BC%E5%BA%A6"><span class="toc-number">7.</span> <span class="toc-text">七、在线检索：别只靠向量相似度</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-Query-Rewrite"><span class="toc-number">7.1.</span> <span class="toc-text">1. Query Rewrite</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-Reranker-%E5%BE%88%E5%85%B3%E9%94%AE"><span class="toc-number">7.2.</span> <span class="toc-text">2. Reranker 很关键</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E7%94%9F%E6%88%90%E9%98%B6%E6%AE%B5%EF%BC%9APrompt-%E8%A6%81%E6%9C%89%E8%BE%B9%E7%95%8C"><span class="toc-number">8.</span> <span class="toc-text">八、生成阶段：Prompt 要有边界</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E8%A6%81%E5%85%81%E8%AE%B8%E5%AE%83%E8%AF%B4%E2%80%9C%E4%B8%8D%E7%9F%A5%E9%81%93%E2%80%9D"><span class="toc-number">8.1.</span> <span class="toc-text">1. 要允许它说“不知道”</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%BC%95%E7%94%A8%E4%B8%8D%E6%98%AF%E8%A3%85%E9%A5%B0"><span class="toc-number">8.2.</span> <span class="toc-text">2. 引用不是装饰</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%9D%E3%80%81%E8%AF%84%E4%BC%B0%EF%BC%9A%E4%B8%8D%E8%A6%81%E5%8F%AA%E9%9D%A0%E6%84%9F%E8%A7%89"><span class="toc-number">9.</span> <span class="toc-text">九、评估：不要只靠感觉</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E3%80%81%E5%B7%A5%E7%A8%8B%E5%8C%96%EF%BC%9A%E4%B8%8A%E7%BA%BF%E5%90%8E%E6%89%8D%E6%98%AF%E7%9C%9F%E6%AD%A3%E5%BC%80%E5%A7%8B"><span class="toc-number">10.</span> <span class="toc-text">十、工程化：上线后才是真正开始</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%96%87%E6%A1%A3%E5%A2%9E%E9%87%8F%E6%9B%B4%E6%96%B0"><span class="toc-number">10.1.</span> <span class="toc-text">1. 文档增量更新</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%9D%83%E9%99%90%E9%9A%94%E7%A6%BB"><span class="toc-number">10.2.</span> <span class="toc-text">2. 权限隔离</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E6%97%A5%E5%BF%97%E8%A6%81%E8%AE%B0%E5%BD%95%E5%88%B0-chunk-%E7%BA%A7%E5%88%AB"><span class="toc-number">10.3.</span> <span class="toc-text">3. 日志要记录到 chunk 级别</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%B8%80%E3%80%81RAG-%E9%A1%B9%E7%9B%AE%E5%85%A8%E9%93%BE%E8%B7%AF%E5%AE%9E%E7%8E%B0"><span class="toc-number">11.</span> <span class="toc-text">十一、RAG 项目全链路实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%BA%8C%E3%80%81%E5%87%A0%E4%B8%AA%E6%88%91%E8%A7%89%E5%BE%97%E6%9C%80%E5%AE%B9%E6%98%93%E8%B8%A9%E7%9A%84%E5%9D%91"><span class="toc-number">12.</span> <span class="toc-text">十二、几个我觉得最容易踩的坑</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%96%87%E6%A1%A3%E6%B2%A1%E5%A4%84%E7%90%86%E5%A5%BD%EF%BC%8C%E5%90%8E%E9%9D%A2%E5%85%A8%E7%99%BD%E6%90%AD"><span class="toc-number">12.1.</span> <span class="toc-text">1. 文档没处理好，后面全白搭</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-chunk-%E4%B8%8D%E6%98%AF%E8%B6%8A%E5%A4%A7%E8%B6%8A%E5%A5%BD"><span class="toc-number">12.2.</span> <span class="toc-text">2. chunk 不是越大越好</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2%E4%B8%8D%E6%98%AF%E5%85%A8%E6%96%87%E6%90%9C%E7%B4%A2%E7%9A%84%E6%9B%BF%E4%BB%A3%E5%93%81"><span class="toc-number">12.3.</span> <span class="toc-text">3. 向量检索不是全文搜索的替代品</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E4%B8%8D%E8%A6%81%E5%BF%BD%E7%95%A5%E2%80%9C%E6%9F%A5%E4%B8%8D%E5%88%B0%E2%80%9D%E7%9A%84%E4%BD%93%E9%AA%8C"><span class="toc-number">12.4.</span> <span class="toc-text">4. 不要忽略“查不到”的体验</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E8%AF%84%E4%BC%B0%E9%9B%86%E8%A6%81%E5%B0%BD%E6%97%A9%E5%BB%BA"><span class="toc-number">12.5.</span> <span class="toc-text">5. 评估集要尽早建</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%99%E5%9C%A8%E6%9C%80%E5%90%8E"><span class="toc-number">13.</span> <span class="toc-text">写在最后</span></a></li></ol></div></div></div></div></main><footer id="footer" style="background-image: url('/media/cover/6.png')"><div id="footer-wrap"><div class="copyright">&copy;2023 - 2026 By AkiTomoyaL</div><div class="framework-info"><span>Framework </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo</a><span class="footer-separator">|</span><span>Theme </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly</a></div><div class="footer_custom_text">前方的区域请以后再来探索喵~</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="Read Mode"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="Toggle Between Traditional Chinese And Simplified Chinese">繁</button><button id="darkmode" type="button" title="Toggle Between Light And Dark Mode"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="Toggle between Single-column and Double-column"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="Setting"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="Table Of Contents"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="Back To Top"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/tw_cn.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"></div><script async src="/js/title.js"></script><script defer src="https://npm.elemecdn.com/jquery@latest/dist/jquery.min.js"></script><script defer data-pjax src="/js/nacho.js"></script><div class="aplayer no-destroy" data-id="2338077229" data-server="netease" data-type="playlist" data-fixed="true" data-autoplay="false" volume="0.15"> </div><script defer src="/js/cursor.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="30" mobile="true" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-nest.min.js"></script><script id="click-heart" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-heart.min.js" async="async" mobile="true"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/metingjs/dist/Meting.min.js"></script><script src="https://cdn.jsdelivr.net/npm/pjax/pjax.min.js"></script><script>let pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show","#web_bg",".js-pjax"]
+
+var pjax = new Pjax({
+  elements: 'a:not([target="_blank"])',
+  selectors: pjaxSelectors,
+  cacheBust: false,
+  analytics: false,
+  scrollRestoration: false
+})
+
+document.addEventListener('pjax:send', function () {
+
+  // removeEventListener
+  btf.removeGlobalFnEvent('pjax')
+  btf.removeGlobalFnEvent('themeChange')
+
+  document.getElementById('rightside').classList.remove('rightside-show')
+  
+  if (window.aplayers) {
+    for (let i = 0; i < window.aplayers.length; i++) {
+      if (!window.aplayers[i].options.fixed) {
+        window.aplayers[i].destroy()
+      }
+    }
+  }
+
+  typeof typed === 'object' && typed.destroy()
+
+  //reset readmode
+  const $bodyClassList = document.body.classList
+  $bodyClassList.contains('read-mode') && $bodyClassList.remove('read-mode')
+
+  typeof disqusjs === 'object' && disqusjs.destroy()
+})
+
+document.addEventListener('pjax:complete', function () {
+  window.refreshFn()
+
+  document.querySelectorAll('script[data-pjax]').forEach(item => {
+    const newScript = document.createElement('script')
+    const content = item.text || item.textContent || item.innerHTML || ""
+    Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+    newScript.appendChild(document.createTextNode(content))
+    item.parentNode.replaceChild(newScript, item)
+  })
+
+  GLOBAL_CONFIG.islazyload && window.lazyLoadInstance.update()
+
+  typeof panguInit === 'function' && panguInit()
+
+  // google analytics
+  typeof gtag === 'function' && gtag('config', '', {'page_path': window.location.pathname});
+
+  // baidu analytics
+  typeof _hmt === 'object' && _hmt.push(['_trackPageview',window.location.pathname]);
+
+  typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+
+  // prismjs
+  typeof Prism === 'object' && Prism.highlightAll()
+})
+
+document.addEventListener('pjax:error', e => {
+  if (e.request.status === 404) {
+    pjax.loadUrl('/404.html')
+  }
+})</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">Search</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="is-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  Loading the Database</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="Search for Posts" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">Search</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="is-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  Loading the Database</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="Search for Posts" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/js/search/local-search.js"></script></div></body></html>
